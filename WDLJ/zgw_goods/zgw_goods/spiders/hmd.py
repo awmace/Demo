@@ -108,10 +108,10 @@ class ZgwSpider(scrapy.Spider):
             data['p_deleted'] = 0  # 删除标识，0代表未删除，1代表删除
             if len(str(li['Id'])) > 6:
                 data['p_sku_url'] = self.parse_url1.format(str(li['Id']))
-                yield scrapy.Request(data['p_sku_url'], callback=self.detail1, meta={'data': data})
+                yield scrapy.Request(data['p_sku_url'], callback=self.detail1, headers=headers, meta={'data': data})
             else:
                 data['p_sku_url'] = self.parse_url2.format(str(li['Id']))
-                yield scrapy.Request(data['p_sku_url'], callback=self.detail2, meta={'data': data})
+                yield scrapy.Request(data['p_sku_url'], callback=self.detail2, headers=headers, meta={'data': data})
             # yield scrapy.Request(data['p_sku_url'], callback=self.detail, meta={'data': data})
             # break
 
