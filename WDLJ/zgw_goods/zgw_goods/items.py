@@ -12,13 +12,17 @@ from scrapy import Item, Field
 class ZgwGoodsItem(scrapy.Item):
     # define the fields for your item here like:
     # name = scrapy.Field()
-    p_id = Field()  # 商品唯一id, 来源_商品唯一标识
+    p_id = Field()  # 站点id_spu_id_sku_id
+    spu_id = Field()  # 详情页id
+    sku_id = Field()  # sku_id，默认1
     p_customer_id = Field()  # 供方唯一id，来源_供方唯一标识
     p_customer_name = Field()  # 供应商名称
     p_spu_code = Field()  # spu编码，配置文件设置，不设置为空
     p_spu_name = Field()  # spu名称
     p_spu_pic = Field()  # spu产品图片地址
-    p_three_category_code = Field()  # 后台类目编码，配置文件设置，不设置为空
+    source_name = Field()  # 来源网站名称
+    p_three_category = Field()  # 末级类目名称
+    p_three_category_code = Field()  # 末级类目对应万郡code
     p_brand_name = Field()  # 品牌名称
     p_sku_valuation_unit = Field()  # 计价单位，计量单位
     p_sku_auxiliary_unit = Field()  # 辅助单位
@@ -38,6 +42,7 @@ class ZgwGoodsItem(scrapy.Item):
     p_create_time = Field()  # 创建时间
     p_deleted = Field()  # 删除标识  0:未删除  1:已删除
     p_list_url = Field()
+    category = Field()  # 商品对应的类目关系:>>连接
     c_enterprise_scope = Field()  # 企业经营范围，主营业务
     c_customer_introduce_type = Field()  # 企业介绍方式；1图片2文字3文字＋图片
     c_customer_introduce = Field()  # 企业简介
@@ -49,28 +54,5 @@ class ZgwGoodsItem(scrapy.Item):
     c_version = Field()  # 数据版本号:20201015
     c_create_time = Field()  # 创建时间
     c_deleted = Field()  # 删除标识0:未删除1:已删除
-
-    # p_id = scrapy.Field()
-    # p_spu_name = scrapy.Field()
-    # p_three_category_code = scrapy.Field()
-    # p_spu_pic = scrapy.Field()
-    # p_price = scrapy.Field()
-    # p_sku_valuation_unit = scrapy.Field()
-    # p_price_num = scrapy.Field()
-    # p_sku_pic = scrapy.Field()
-    # p_attribute = scrapy.Field()
-    # p_brand_name = scrapy.Field()
-    # p_attribute_value = scrapy.Field()
-    # p_sku_introduce_type = scrapy.Field()
-    # p_sku_introduce = scrapy.Field()
-    # c_customer_url = scrapy.Field()
-    # p_customer_id = scrapy.Field()
-    # p_customer_name = scrapy.Field()
-    # c_enterprise_scope = scrapy.Field()
-    # c_customer_address = scrapy.Field()
-    # c_customer_number = scrapy.Field()
-    # c_customer_introduce_type = scrapy.Field()
-    # p_source = scrapy.Field()
-    # p_version = scrapy.Field()
-    # p_list_url = scrapy.Field()
-    # p_sku_url = scrapy.Field()
+    vandream_flag = Field()  # 是否符合万郡入库标准,1:符合0:不符合
+    customer_follow_state = Field()  # 店铺跟进状态1:已入住 0:待跟进

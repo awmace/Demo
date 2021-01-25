@@ -68,7 +68,7 @@ CONCURRENT_REQUESTS = 33
 # Configure item pipelines
 # See https://docs.scrapy.org/en/latest/topics/item-pipeline.html
 ITEM_PIPELINES = {
-    'zgw_goods.pipelines.ZgwGoodsPipeline': 300,
+    # 'zgw_goods.pipelines.ZgwGoodsPipeline': 300,
 }
 
 # Enable and configure the AutoThrottle extension (disabled by default)

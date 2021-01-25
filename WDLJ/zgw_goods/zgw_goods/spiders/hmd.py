@@ -112,65 +112,75 @@ class ZgwSpider(scrapy.Spider):
             else:
                 data['p_sku_url'] = self.parse_url2.format(str(li['Id']))
                 yield scrapy.Request(data['p_sku_url'], callback=self.detail2, headers=headers, meta={'data': data})
-            # yield scrapy.Request(data['p_sku_url'], callback=self.detail, meta={'data': data})
-            # break
-
-    def detail(self, response):  # 解析详情页
-        data = response.meta['data']  # item
-        ele_response = etree.HTML(response.text)
-        data['p_price'] = ele_response.xpath('//strong[@class="tm-price"]/text()')
-        if data['p_price']:  # 批发价
-            data['p_price'] = data['p_price'][0]
-        else:  # 会员价
-            data['p_price'] = ele_response.xpath('//span[@class="price action-update-price"]/text()')[0][1:]
-        data['p_sku_valuation_unit'] = ''
-        data['p_price_num'] = ''
-        quantity = ele_response.xpath('//div[@class="weight"]/text()')  # 获取起订量和单位
-        if quantity:
-            pass
-        else:
-            quantity = ele_response.xpath('//p[@class="count"]/text()')
-        for s in quantity[0].replace('≥', ''):
-            if s in self.digital:
-                data['p_price_num'] = data['p_price_num'] + s
-            else:
-                data['p_sku_valuation_unit'] = data['p_sku_valuation_unit'] + s
-        print(data['p_id'], data['p_three_category_code'], data['p_price'], data['p_price_num'],
-              data['p_sku_valuation_unit'], )
-        data['p_spu_pic'] = ele_response.xpath('//span[@class="jqzoom "]/img/@src')
-        if data['p_spu_pic']:
-            data['p_spu_pic'] = data['p_spu_pic'][0]
-        else:
-            data['p_spu_pic'] = ele_response.xpath('//img[@class="jqzoom"]/@src')[0]
-        print(data['p_spu_pic'])
 
     def detail1(self, response):
         data = response.meta['data']  # item
         ele_response = etree.HTML(response.text)
-        data['p_price'] = ele_response.xpath('//strong[@class="tm-price"]/text()')[0]
+        try:
+            data['p_price'] = ele_response.xpath('//strong[@class="tm-price"]/text()')[0]
+            quantity = ele_response.xpath('//p[@class="count"]/text()')[0].replace('≥', '')
+            data['p_price_num'] = ''.join([s for s in quantity if s in self.digital])  # 起订量
+            data['p_sku_valuation_unit'] = ''.join([s for s in quantity if s not in self.digital])  # 单位
+        except:
+            data['p_price'] = ele_response.xpath('//p[@class="NumPricet"]/text()')[0][1:]
+            data['p_price_num'] = ele_response.xpath('//input[@id="txtCount"]/@value')[0]
+            data['p_sku_valuation_unit'] = ''.join([s for s in
+                                                    ele_response.xpath('//p[@class="NumBegin"]/text()')[0].split('~')[
+                                                        -1] if
+                                                    s not in self.digital])
         if '面' in data['p_price']:  # 面议
-            del data['p_price']
-        quantity = ele_response.xpath('//p[@class="count"]/text()')[0].replace('≥', '')
-        data['p_price_num'] = ''.join([s for s in quantity if s in self.digital])  # 起订量
-        data['p_sku_valuation_unit'] = ''.join([s for s in quantity if s not in self.digital])  # 单位
+            data['p_price'] = float(0)
         data['p_spu_pic'] = ele_response.xpath('//span[@class="jqzoom "]/img/@src')  # spu图片地址
         if data['p_spu_pic']:
             data['p_spu_pic'] = 'https:' + data['p_spu_pic'][0]
         list_pic = ele_response.xpath('//div[@class="goods_items"]/ul/li/img/@src')
-        data['p_sku_pic'] = ['https:' + i for i in list_pic]
-        print(data['p_id'], data['p_price_num'], data['p_sku_valuation_unit'], data['p_spu_pic'],
-              data['p_sku_pic'])
+        data['p_sku_pic'] = json.dumps(['https:' + i for i in list_pic], ensure_ascii=False)
+        keys_values = ele_response.xpath('//div[@class="pro_parameter"]/ul/li/@title')
+        data['p_attribute'] = json.dumps([i.split('：')[0] for i in keys_values], ensure_ascii=False)
+        data['p_attribute_value'] = json.dumps({i.split('：')[0]: i.split('：')[-1] for i in keys_values},
+                                               ensure_ascii=False)
+        p_sku_introduce = ele_response.xpath('//div[@class="pro_description"]//img/@src')
+        for index, img in enumerate(p_sku_introduce):
+            if 'https:' not in img:
+                p_sku_introduce[index] = 'https:' + img
+        data['p_sku_introduce'] = '&&'.join(p_sku_introduce)
+        data['p_sku_introduce_type'] = 1
+        data['p_create_time'] = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
+        yield data
 
     def detail2(self, response):
         data = response.meta['data']  # item
         ele_response = etree.HTML(response.text)
         data['p_price'] = ele_response.xpath('//span[@class="price action-update-price"]/text()')[0][1:]
+        if '面' in data['p_price']:  # 面议
+            data['p_price'] = float(0)
         quantity = ele_response.xpath('//div[@class="weight"]/text()')[0].replace('≥', '')
         data['p_price_num'] = ''.join([s for s in quantity if s in self.digital])
         data['p_sku_valuation_unit'] = ''.join([s for s in quantity if s not in self.digital])
         data['p_spu_pic'] = ele_response.xpath('//img[@class="jqzoom"]/@src')
         if data['p_spu_pic']:
             data['p_spu_pic'] = data['p_spu_pic'][0]
-        data['p_sku_pic'] = ele_response.xpath('//div[@class="slider-thumb-wrap"]/ul/li/div/span/img/@src')
-        print(data['p_id'], data['p_price_num'], data['p_sku_valuation_unit'], data['p_spu_pic'],
-              data['p_sku_pic'])
+        data['p_sku_pic'] = json.dumps(ele_response.xpath('//div[@class="slider-thumb-wrap"]/ul/li/div/span/img/@src'),
+                                       ensure_ascii=False)
+        keys = [i.split('：')[0] for i in ele_response.xpath('//ul[@class="detailinfo-list"]/li/span/text()')]
+        values = ele_response.xpath('//ul[@class="detailinfo-list"]/li/text()')
+        data['p_attribute'] = json.dumps(keys, ensure_ascii=False)
+        data['p_attribute_value'] = json.dumps({i: values[index] for index, i in enumerate(keys)},ensure_ascii=False)
+        data['p_sku_introduce'] = '&&'.join(ele_response.xpath('//div[@class="goods-info"]//img/@src'))
+        data['p_sku_introduce_type'] = 1
+        data['c_customer_url'] = ele_response.xpath('//div[@class="justify-content_flex-end"]/div/a/@href')[0]
+        data['p_customer_id'] = str(self.source) + '_' + data['c_customer_url'].split('=')[-1]
+        data['p_customer_name'] = ele_response.xpath('//div[@class="justify-content_flex-end"]/div/a/text()')[0]
+        yield scrapy.Request(data['c_customer_url'], callback=self.detail_comp, headers=headers, meta={'data': data})
+
+    def detail_comp(self, response):
+        data = response.meta['data']
+        ele_response = etree.HTML(response.text)
+        text = ele_response.xpath('//div[@class="fontsize12 oneLine"]/text()')
+        if not text:
+            text = data['p_customer_name']
+        imgs = '&&'.join(ele_response.xpath('//img[@class="swiper-lazy"]/@src'))
+        data['c_customer_introduce'] = text + '@@' + imgs
+        data['c_customer_introduce_type'] = 3
+        data['p_create_time'] = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
+        yield data

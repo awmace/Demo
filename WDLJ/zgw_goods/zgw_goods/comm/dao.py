@@ -16,7 +16,6 @@ class UseSQL:
         # 网站唯一识别ID
         self.own_id = own_id
         self.param = (int(own_id), settings['VERSION'],)
-
     # 判断此站点是否开始生产
     def get_product(self):
         try:
