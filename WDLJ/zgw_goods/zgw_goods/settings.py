@@ -22,7 +22,7 @@ NEWSPIDER_MODULE = 'zgw_goods.spiders'
 ROBOTSTXT_OBEY = False
 
 # Configure maximum concurrent requests performed by Scrapy (default: 16)
-CONCURRENT_REQUESTS = 33
+CONCURRENT_REQUESTS = 16
 
 # Configure a delay for requests for the same website (default: 0)
 # See https://docs.scrapy.org/en/latest/topics/settings.html#download-delay
@@ -55,9 +55,9 @@ CONCURRENT_REQUESTS = 33
 
 # Enable or disable downloader middlewares
 # See https://docs.scrapy.org/en/latest/topics/downloader-middleware.html
-# DOWNLOADER_MIDDLEWARES = {
-#    'zgw_goods.middlewares.ZgwGoodsDownloaderMiddleware': 543,
-# }
+DOWNLOADER_MIDDLEWARES = {
+    'zgw_goods.middlewares_ip.ProxyMiddleware': 543,
+}
 
 # Enable or disable extensions
 # See https://docs.scrapy.org/en/latest/topics/extensions.html
@@ -68,7 +68,7 @@ CONCURRENT_REQUESTS = 33
 # Configure item pipelines
 # See https://docs.scrapy.org/en/latest/topics/item-pipeline.html
 ITEM_PIPELINES = {
-    # 'zgw_goods.pipelines.ZgwGoodsPipeline': 300,
+    'zgw_goods.pipelines.ZgwGoodsPipeline': 300,
 }
 
 # Enable and configure the AutoThrottle extension (disabled by default)
@@ -91,4 +91,6 @@ ITEM_PIPELINES = {
 # HTTPCACHE_DIR = 'httpcache'
 # HTTPCACHE_IGNORE_HTTP_CODES = []
 # HTTPCACHE_STORAGE = 'scrapy.extensions.httpcache.FilesystemCacheStorage'
+
 VERSION = time.strftime('%Y%m%d', time.localtime(time.time()))
+# VERSION = '20210203'

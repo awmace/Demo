@@ -45,9 +45,11 @@ class ZgwGoodsItem(scrapy.Item):
     category = Field()  # 商品对应的类目关系:>>连接
     c_enterprise_scope = Field()  # 企业经营范围，主营业务
     c_customer_introduce_type = Field()  # 企业介绍方式；1图片2文字3文字＋图片
-    c_customer_introduce = Field()  # 企业简介
+    c_customer_introduce = Field()  # 文字
+    c_customer_introduce_pic = Field()  # 图片
     c_customer_address = Field()  # 企业这册地址、企业所在地区
-    c_customer_number = Field()  # 联系方式
+    c_customer_number = Field()  # 座机
+    c_customer_phone = Field()  # 手机号
     c_customer_url = Field()  # 店铺首页url
     c_other_info = Field()  # 其他信息
     c_source = Field()  # 数据来源，1:1688
@@ -56,3 +58,4 @@ class ZgwGoodsItem(scrapy.Item):
     c_deleted = Field()  # 删除标识0:未删除1:已删除
     vandream_flag = Field()  # 是否符合万郡入库标准,1:符合0:不符合
     customer_follow_state = Field()  # 店铺跟进状态1:已入住 0:待跟进
+    p_sku_introduce_pic = Field()  # 图片;
