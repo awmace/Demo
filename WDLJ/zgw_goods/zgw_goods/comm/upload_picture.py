@@ -53,7 +53,7 @@ class UploadPic:
 
     def get_url(self):
         try:
-            r = requests.get(self.vandream_url, timeout=30)
+            r = requests.get(self.vandream_url, timeout=0.5)
             r.raise_for_status()
             r.encoding = r.apparent_encoding
             return r.text
@@ -64,7 +64,7 @@ class UploadPic:
     def send_file(self, upload_url, file_path):
         try:
             files = {'file': open(file_path, 'rb')}
-            r = requests.post(upload_url, files=files, timeout=30)
+            r = requests.post(upload_url, files=files, timeout=0.5)
             r.raise_for_status()
             r.encoding = r.apparent_encoding
             return r.text

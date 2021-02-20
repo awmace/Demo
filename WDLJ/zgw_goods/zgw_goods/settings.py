@@ -93,4 +93,4 @@ ITEM_PIPELINES = {
 # HTTPCACHE_STORAGE = 'scrapy.extensions.httpcache.FilesystemCacheStorage'
 
 VERSION = time.strftime('%Y%m%d', time.localtime(time.time()))
-# VERSION = '20210203'
+# VERSION = '20210208'

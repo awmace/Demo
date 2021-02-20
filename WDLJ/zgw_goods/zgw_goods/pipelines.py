@@ -10,16 +10,16 @@ import MySQLdb
 import requests
 from itemadapter import ItemAdapter
 
-# conn = MySQLdb.connect(
-#     host='47.113.200.109',
-#     # mysql所在主机的ip
-#     port=33063,  # mysql的端口号
-#     user="aiit",  # mysql 用户名
-#     password="aiit9876",  # mysql 的密码
-#     db="hx_sales",  # 要使用的库名
-#     charset="utf8"  # 连接中使用的字符集
-# )
-conn = MySQLdb.connect(
+conn1 = MySQLdb.connect(
+    host='47.113.200.109',
+    # mysql所在主机的ip
+    port=33063,  # mysql的端口号
+    user="aiit",  # mysql 用户名
+    password="aiit9876",  # mysql 的密码
+    db="hx_sales",  # 要使用的库名
+    charset="utf8"  # 连接中使用的字符集
+)
+conn2 = MySQLdb.connect(
     host='101.68.94.251',
     # mysql所在主机的ip
     port=3308,  # mysql的端口号
@@ -28,7 +28,8 @@ conn = MySQLdb.connect(
     db="b2b_product_house",  # 要使用的库名
     charset="utf8"  # 连接中使用的字符集
 )
-cursor = conn.cursor()
+cursor = conn1.cursor()
+cursor_wj = conn2.cursor()
 
 p_url = 'http://47.113.195.31:3012/digital-oc/subject/27/object/list/'
 c_url = 'http://47.113.195.31:3012/digital-oc/subject/28/object/list/'
@@ -37,6 +38,7 @@ header = {'Content-Type': 'application/json'}  # 请求头
 
 class ZgwGoodsPipeline(object):
     def __init__(self):
+        self.count = 0
         self.products = []
         self.customers = []
 
@@ -76,19 +78,28 @@ class ZgwGoodsPipeline(object):
                 'customer_number': item.get('c_customer_number'),  # 座机
                 'customer_phone': item.get('c_customer_phone'),  # 手机号
                 'customer_url': item.get('c_customer_url'),
-                'cid': item.get('p_customer_id')  # 店铺在网站中的id
+                'cid': item.get('p_customer_id'),  # 店铺在网站中的id
+                'vandream_flag': item.get('vandream_flag')
             })  # 商品与店铺信息
         }
         data_key = list(sql_data.keys())
         data_value = list(sql_data.values())
         insert_sql = 'insert into product_house_info (' + ','.join(data_key) + ') values (' + ','.join(
             '%r' % i for i in data_value) + ')'
-        try:
-            cursor.execute(insert_sql)
-        except Exception as e:
-            print(e)
-        conn.commit()
-
+        if spider.name not in ['zgw', 'wuage']:
+            try:
+                cursor.execute(insert_sql)
+            except Exception as e:
+                print(e, '错误在{}'.format(spider.name))
+            conn1.commit()
+        else:
+            try:
+                cursor_wj.execute(insert_sql)
+                self.count += 1
+                print(spider.name, self.count)
+            except Exception as e:
+                print(e, '错误在{}'.format(spider.name))
+            conn2.commit()
         product_item = {
             'ROW': item.get('p_id'),  # 商品在目标网站中的唯一标识
             'spu_id': item.get('spu_id'),  #

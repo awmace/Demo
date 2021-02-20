@@ -3,13 +3,12 @@ import json, requests
 import logging
 import re
 import math
-import MySQLdb
 import scrapy, time
 from lxml import etree
 from scrapy.utils.project import get_project_settings
-
+from ..comm.get_week_one import get_current_week
 from ..comm.dao import UseSQL
-from WDLJ.zgw_goods.zgw_goods.items import ZgwGoodsItem
+from ..items import ZgwGoodsItem
 
 settings = get_project_settings()
 logger = logging.getLogger(__name__)
@@ -59,7 +58,46 @@ cookie = {'homedoLogCID': '1b3d31e2-0783-4887-bb20-a2151b50bb50',
           'Hm_lpvt_d1d21a226b3b6cbb96842713353fc9f7': '1611023333'}
 
 
-class ZgwSpider(scrapy.Spider):
+class save_HmdSpider(scrapy.Spider):
+    name = 'save_hmd'
+
+    def __init__(self):
+        self.head_url = 'https://b2b.homedo.com/product/directsearch/newSearch'  # 列表页url
+        self.user = UseSQL(9)
+        self.table_id = None
+
+    def start_requests(self):
+        result = self.user.get_product()
+        if result[1] != None:
+            logger.info(str(9) + '站点，已经存在生产者')
+        else:
+            count, self.table_id = self.user.tobe_product()
+            start_url = 'https://www.homedo.com/?utm_source=wmt_sem_baidupc&utm_medium=CPC&utm_term=180524&utm_content=180009516&utm_campaign=18013'
+            yield scrapy.Request(start_url, callback=self.traverse_url)
+
+    def traverse_url(self, response):  # 解析河姆渡主页
+        ele_start_response = etree.HTML(response.text)
+        class_urls = ele_start_response.xpath('//ul[@class="menu-sun"]/li/p/a/@href')
+        # 获取类别首页url
+        for class_url in class_urls:
+            if '\r\n' in class_url:
+                class_url = re.sub('\r\n', '', class_url)
+            if 'Id=' in class_url:
+                cate_id = class_url.split('Id=')[-1]
+                formdata["categoryId"] = cate_id
+                yield scrapy.FormRequest(self.head_url, formdata=formdata, cookies=cookie, headers=headers,
+                                         callback=self.save_list_url, meta={'cate_id': cate_id})
+
+    def save_list_url(self, response):  # 解析类别首页
+        data = json.loads(response.text)['data']
+        cate_id = response.meta['cate_id']  # 类别id
+        pages = math.ceil(data[0]['total'] / 40)  # 页数
+        for page in range(1, pages + 1):
+            url = cate_id + '_' + str(page)  # 类别id_页码
+            self.user.insert_url_by_id(self.table_id, url)
+
+
+class HmdSpider(scrapy.Spider):
     name = 'hmd'
 
     def __init__(self):
@@ -68,7 +106,8 @@ class ZgwSpider(scrapy.Spider):
         self.parse_url2 = 'https://shop.homedo.com/item.html?item_id={}'
         self.user = UseSQL(9)
         self.source = 9
-        self.version = time.strftime('%Y%m%d', time.localtime(time.time()))
+        self.source_name = '河姆渡'
+        self.version = get_current_week()
         self.digital = '1234567890.'
 
     def start_requests(self):
@@ -98,12 +137,18 @@ class ZgwSpider(scrapy.Spider):
         p_list_url = response.meta['p_list_url']
         for li in list_data:
             data = ZgwGoodsItem()  # 定义内容
-            data['p_id'] = str(self.source) + '_' + str(li['Id'])  # 商品在网站中的唯一标识id
+            data['p_id'] = str(self.source) + '_' + str(li['Id']) + '_1'  # 商品在网站中的唯一标识id
+            data['spu_id'] = str(self.source) + '_' + str(li['Id'])
+            data['sku_id'] = str(self.source) + '_1'
             data['p_spu_name'] = li['Name']  # 商品/spu名称
             data['p_list_url'] = p_list_url  # 所在页链接
-            data['p_three_category_code'] = li.get('CategoryName3')  # 三级分类名称
+            data['category'] = li['CategoryName1'] + '>>' + li['CategoryName2'] + '>>' + li['CategoryName3']
+            data['p_three_category'] = li.get('CategoryName3')  # 三级分类名称
             data['p_brand_name'] = li.get('brandName')  # 品牌名称
             data['p_source'] = self.source  # 来源网站id
+            data['source_name'] = self.source_name
+            data['vandream_flag'] = 0
+            data['customer_follow_state'] = 0
             data['p_version'] = self.version  # 数据版本号
             data['p_deleted'] = 0  # 删除标识，0代表未删除，1代表删除
             if len(str(li['Id'])) > 6:
@@ -139,11 +184,11 @@ class ZgwSpider(scrapy.Spider):
         data['p_attribute'] = json.dumps([i.split('：')[0] for i in keys_values], ensure_ascii=False)
         data['p_attribute_value'] = json.dumps({i.split('：')[0]: i.split('：')[-1] for i in keys_values},
                                                ensure_ascii=False)
-        p_sku_introduce = ele_response.xpath('//div[@class="pro_description"]//img/@src')
-        for index, img in enumerate(p_sku_introduce):
+        p_sku_introduce_pic = ele_response.xpath('//div[@class="pro_description"]//img/@src')
+        for index, img in enumerate(p_sku_introduce_pic):
             if 'https:' not in img:
-                p_sku_introduce[index] = 'https:' + img
-        data['p_sku_introduce'] = '&&'.join(p_sku_introduce)
+                p_sku_introduce_pic[index] = 'https:' + img
+        data['p_sku_introduce_pic'] = p_sku_introduce_pic
         data['p_sku_introduce_type'] = 1
         data['p_create_time'] = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
         yield data
@@ -165,8 +210,8 @@ class ZgwSpider(scrapy.Spider):
         keys = [i.split('：')[0] for i in ele_response.xpath('//ul[@class="detailinfo-list"]/li/span/text()')]
         values = ele_response.xpath('//ul[@class="detailinfo-list"]/li/text()')
         data['p_attribute'] = json.dumps(keys, ensure_ascii=False)
-        data['p_attribute_value'] = json.dumps({i: values[index] for index, i in enumerate(keys)},ensure_ascii=False)
-        data['p_sku_introduce'] = '&&'.join(ele_response.xpath('//div[@class="goods-info"]//img/@src'))
+        data['p_attribute_value'] = json.dumps({i: values[index] for index, i in enumerate(keys)}, ensure_ascii=False)
+        data['p_sku_introduce_pic'] = ele_response.xpath('//div[@class="goods-info"]//img/@src')
         data['p_sku_introduce_type'] = 1
         data['c_customer_url'] = ele_response.xpath('//div[@class="justify-content_flex-end"]/div/a/@href')[0]
         data['p_customer_id'] = str(self.source) + '_' + data['c_customer_url'].split('=')[-1]
@@ -175,12 +220,23 @@ class ZgwSpider(scrapy.Spider):
 
     def detail_comp(self, response):
         data = response.meta['data']
+        data['customer_follow_state'] = 0  # 店铺跟进状态
         ele_response = etree.HTML(response.text)
         text = ele_response.xpath('//div[@class="fontsize12 oneLine"]/text()')
         if not text:
             text = data['p_customer_name']
-        imgs = '&&'.join(ele_response.xpath('//img[@class="swiper-lazy"]/@src'))
-        data['c_customer_introduce'] = text + '@@' + imgs
-        data['c_customer_introduce_type'] = 3
+        else:
+            text = text[0]
+        data['c_customer_introduce_pic'] = [i for i in ele_response.xpath('//img[@class="swiper-lazy"]/@src') if
+                                            'http' in i]  # 去除非商家图片信息
+        data['c_customer_introduce'] = text
+        if data['c_customer_introduce_pic'] and not data['c_customer_introduce']:
+            data['c_customer_introduce_type'] = 1
+        elif not data['c_customer_introduce_pic'] and data['c_customer_introduce']:
+            data['c_customer_introduce_type'] = 2
+        elif data['c_customer_introduce_pic'] and data['c_customer_introduce']:
+            data['c_customer_introduce_type'] = 3
+        else:
+            data['c_customer_introduce_type'] = 0
         data['p_create_time'] = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
         yield data

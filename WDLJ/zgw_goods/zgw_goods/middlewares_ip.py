@@ -110,10 +110,14 @@ class ElectricityDownloaderMiddleware:
 
 
 class ProxyMiddleware(object):
-    proxyUser = "LIvvmAefSIOBgoOb"
-    proxyPass = "Cpr6iLteufAS5Une"
-    proxyHost = "secondtransfer.moguproxy.com"
-    proxyPort = "9001"
+
+    def __init__(self):
+        self.spider_name = ['clw', 'clw_url']
+
+    proxyUser = "t11266590503853"
+    proxyPass = "kvsvjjyt"
+    proxyHost = "tps149.kdlapi.com"
+    proxyPort = "15818"
 
     proxyServer = "http://%(host)s:%(port)s" % {
         "host": proxyHost,
@@ -123,7 +127,7 @@ class ProxyMiddleware(object):
     proxyAuth = "Basic " + base64.urlsafe_b64encode(bytes((proxyUser + ":" + proxyPass), "ascii")).decode("utf8")
 
     def process_request(self, request, spider):
-        if spider.name == 'clw' or spider.name == 'clw_url':
+        if spider.name in self.spider_name:
             request.meta["proxy"] = self.proxyServer
             request.headers["Proxy-Authorization"] = self.proxyAuth
             request.headers["User-Agent"] = get_user()

@@ -1,13 +1,15 @@
 # -*- coding: utf-8 -*-
 import json, requests
 import re
-
-import MySQLdb
+import logging
 import scrapy, time
 from lxml import etree
+from ..comm.dao import UseSQL
+from ..items import ZgwGoodsItem
+from ..comm.upload_picture import UploadPic
+from ..comm.get_week_one import get_current_week
 
-from WDLJ.zgw_goods.zgw_goods.items import ZgwGoodsItem
-
+logger = logging.getLogger(__name__)
 # 类目关系
 category_2 = {
     "普卷": "热卷频道",
@@ -25,6 +27,7 @@ category_2 = {
     "镀铝锌卷": "冷镀频道",
     "酸洗卷": "冷镀频道",
     "有花镀锌卷": "冷镀频道",
+    "无花镀锌卷": "冷镀频道",
     "镀锌板": "冷镀频道",
     "冷成型": "冷镀频道",
     "普板": "中厚板频道",
@@ -43,8 +46,10 @@ category_2 = {
     "三级盘螺": "建材频道",
     "高线": "建材频道",
     "四级抗震盘螺": "建材频道",
+    "五级抗震螺纹钢": "建材频道",
     "四级螺纹钢": "建材频道",
     "四级盘螺": "建材频道",
+    "四级抗震螺纹钢": "建材频道",
     "H型钢": "型管频道",
     "T型钢": "型管频道",
     "扁钢": "型管频道",
@@ -60,6 +65,8 @@ category_2 = {
     "镀锌管": "型管频道",
     "螺旋管": "型管频道",
     "冷轧板": "不锈钢频道",
+    "不锈钢冷轧板": "不锈钢频道",
+    "不锈钢热轧平板": "不锈钢频道",
     "热轧板": "不锈钢频道",
     "型材": "不锈钢频道",
     "管材": "不锈钢频道",
@@ -72,6 +79,7 @@ category_2 = {
     "拉丝材": "圆钢频道",
     "普碳开平板": "开平板频道",
     "低合金开平板": "开平板频道",
+    "出厂平板": "开平板频道",
     "花纹开平板": "开平板频道"}
 # 类目编目关系
 vandream_category_code_2 = {
@@ -201,26 +209,68 @@ vandream_attribute_code_2 = {
     "表面等级": "NX000042"
 }
 p_list_s = 'https://zmall.zhaogang.com/?pn={}&ps=50&qz=true&ct=zg_arr_countrywide'
-p_version = time.strftime('%Y%m%d', time.localtime(time.time()))
+
 headers = {
     'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36'
 }
+
+
+class Save_ZgwSpider(scrapy.Spider):
+    name = 'zgw_url'
+
+    def __init__(self):
+        self.head_url = 'https://b2b.homedo.com/product/directsearch/newSearch'  # 列表页url
+        self.source = 2
+        self.user = UseSQL(self.source)
+        self.table_id = None
+
+    def start_requests(self):
+        result = self.user.get_product()
+        if result[1] != None:
+            logger.info(str(self.source) + '站点，已经存在生产者')
+        else:
+            count, self.table_id = self.user.tobe_product()
+            url = 'https://zmall.zhaogang.com/?pn=1&ps=50&qz=true&ct=zg_arr_countrywide'
+            yield scrapy.Request(url, callback=self.save_list_url, headers=headers)
+
+    def save_list_url(self, response):
+        if self.table_id:
+            ele_response = etree.HTML(response.text)
+            page_num = ele_response.xpath('//div[@class="page-num"]/text()')[0].strip().split('/')[-1]
+            for page in range(1, int(page_num) + 1):
+                p_list_url = p_list_s.format(page)
+                self.user.insert_url_by_id(self.table_id, p_list_url)
 
 
 class ZgwSpider(scrapy.Spider):
     name = 'zgw'
 
     def __init__(self):
+        self.user = UseSQL(2)
         self.goods = 0
         self.source_name = '找钢网'
         self.source = 2
+        self.version = get_current_week()
         self.sku_id = 1
+        self.u = UploadPic()
 
     def start_requests(self):
-        for page in range(1, 1050):
-            meta = dict()
-            meta['p_list_url'] = p_list_s.format(page)
-            yield scrapy.Request(meta['p_list_url'], headers=headers, callback=self.parse, meta=meta)
+        # 消费url
+        while True:  # 循环获取列表页url
+            result = self.user.get_product()
+            if result[1] == None:
+                break
+            else:
+                # 删除此条记录
+                id = result[1].get('id')  # 表中id,根据表中id删除数据
+                p_list_url = result[1].get('url')
+                res = self.user.delete_url_by_id(id)  # 根据id删除表中数据
+                if res:
+                    logger.info("delete success count:" + str(result))
+                    yield scrapy.Request(p_list_url, headers=headers, callback=self.parse,
+                                         meta={'p_list_url': p_list_url})
+                else:
+                    logger.info('其它消费者消费了数据:' + str(p_list_url))
 
     def parse(self, response):
         meta = response.meta
@@ -247,19 +297,25 @@ class ZgwSpider(scrapy.Spider):
         data = meta['data']
         data['p_source'] = self.source
         data['c_source'] = self.source
-        data['p_version'] = p_version
+        data['p_version'] = self.version
         data['c_version'] = data['p_version']
         data['p_list_url'] = meta['p_list_url']
         data['p_spu_name'] = ele_res.xpath('//span[@class="title"]/text()')[0]
         data['p_three_category'] = data['p_spu_name'].split(' ')[0]
-        data['p_three_category_code'] = vandream_category_code_2[data['p_three_category']]  # 待写
-        data['category'] = category_2[data['p_three_category']] + '>>' + data['p_three_category']
-        data['p_spu_pic'] = ele_res.xpath('//meta[@name="og:image"]/@content')[0].split('?')[0]
+        data['p_three_category_code'] = vandream_category_code_2.get(data['p_three_category'])
+        superior = category_2.get(data['p_three_category'])
+        if not superior:
+            data['category'] = data['p_three_category']
+        else:
+            data['category'] = superior + '>>' + data['p_three_category']
+        # 图片处理
+        spu_pic_url = ele_res.xpath('//meta[@name="og:image"]/@content')[0].split('?')[0]
+        data['p_spu_pic'] = self.u.generate(spu_pic_url)
         data['p_price'] = float(ele_res.xpath('//span[@class="num"]/text()')[0].strip())
         data['p_sku_valuation_unit'] = ele_res.xpath('//span[@class="sep"]/text()')[1].split('/')[-1]
         p_price_num = ele_res.xpath('//td[@class="sku-item-td info-box"]/div[1]/text()')[0].split(' ')[0]
         data['p_price_num'] = float(re.sub('[\u4e00-\u9fa5]', '', p_price_num))
-        data['p_sku_pic'] = ele_res.xpath('//meta[@name="og:image"]/@content')[0].split('?')[0]
+        data['p_sku_pic'] = data['p_spu_pic']
         attribute_num = ele_res.xpath('//div[@class="params-item fl"]')
         data['p_attribute'] = ele_res.xpath('//span[@class="label fl"]/text()')
         p_attribute_value = dict()
@@ -277,8 +333,9 @@ class ZgwSpider(scrapy.Spider):
                 p_attribute_value[data['p_attribute'][i]] = '——'
         data['p_attribute'] = json.dumps(data['p_attribute'], ensure_ascii=False)
         data['p_attribute_value'] = json.dumps(p_attribute_value, ensure_ascii=False)
-        data['p_sku_introduce_type'] = 3
-        data['p_sku_introduce'] = data['p_spu_pic'] + '@@' + json.dumps(p_attribute_value, ensure_ascii=False)
+        data['p_sku_introduce_type'] = 0
+        data['p_sku_introduce'] = None  # 只存文字
+        data['p_sku_introduce_pic'] = None  # 图片url
         shop_name = meta['shop_names'][meta['index']]
         data['p_customer_id'] = '2_' + shop_name.split('/')[-1]
         data['c_customer_url'] = 'https://zmall.zhaogang.com' + shop_name + '/search?pn=1&ps=50&qz=true'
@@ -287,12 +344,15 @@ class ZgwSpider(scrapy.Spider):
         phone = meta['ele_response'].xpath(
             '//div[@class="gc-item-table-list"]/div[{}]//div[@class="detail-cont-wrap"]/div[4]/span[2]/text()'.format(
                 meta['index'] + 1))
-        if phone and (len(phone[0]) > 6):
-            data['c_customer_number'] = phone[0]
+        if phone:  # 判断存在不存在
+            data['c_customer_phone'] = re.findall('1[35789]\d{8,9}', phone[0], re.S)
+            data['c_customer_number'] = re.findall('0[1-9]\d{2,3}-[0-9]\d{6,8}', phone[0], re.S)
+            data['c_customer_phone'] = data['c_customer_phone'][0] if data['c_customer_phone'] else None
+            data['c_customer_number'] = data['c_customer_number'][0] if data['c_customer_number'] else None
         else:
             pass
-        data['c_customer_introduce_type'] = '2'
-        if data.get('p_three_category_code') and data.get('c_customer_number'):
+        data['c_customer_introduce_type'] = 0
+        if data.get('c_customer_number'):
             data['vandream_flag'] = 1  # 类目符合
         else:
             data['vandream_flag'] = 0  # 类目不符合
@@ -311,7 +371,5 @@ class ZgwSpider(scrapy.Spider):
         data['c_create_time'] = data['p_create_time']
         data['p_deleted'] = 0
         data['c_deleted'] = 0
-        self.goods += 1
-        print(self.goods)
-        # print(data)
+        data['customer_follow_state'] = 0
         yield data

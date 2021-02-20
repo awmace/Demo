@@ -77,8 +77,5 @@ class UseSQL:
 
 
 if __name__ == '__main__':
-    # test
-    # use = UseSQL(2)
-    # use.delete_url_by_id(83)
     use = UseSQL(9)
     use.delete_url_by_id()
